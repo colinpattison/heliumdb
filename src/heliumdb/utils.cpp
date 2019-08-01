@@ -2,8 +2,13 @@
 #include "exception.h"
 #include <string>
 #include "bytesobject.h"
+#include <iostream>
+
+using namespace std;
 
 static PyObject* PICKLE_MODULE = NULL;
+static PyObject* BSON_MODULE = NULL;
+static PyObject* BSON_CLASS = NULL;
 
 PyObject*
 pickleDumps (PyObject* obj)
@@ -18,6 +23,42 @@ pickleDumps (PyObject* obj)
                                        NULL);
 }
 
+bool
+initBson ()
+{
+    if (BSON_MODULE == NULL &&
+        (BSON_MODULE = PyImport_ImportModuleNoBlock ("bson")) == NULL)
+    {
+        PyErr_SetString (HeliumDbException, "failed to import bson");
+        return false;
+    }
+
+    PyObject* pDict = PyModule_GetDict (BSON_MODULE);
+    if (pDict == NULL)
+        return false;
+
+    if (BSON_CLASS == NULL &&
+        (BSON_CLASS = PyDict_GetItemString (pDict, "BSON")) == NULL)
+    {
+        PyErr_SetString (HeliumDbException, "failed to retrieve bson.BSON");
+        return false;
+    }
+
+    return true;
+}
+
+PyObject*
+bsonEncodeObject (PyObject* o)
+{
+    if (!initBson ())
+        return NULL;
+
+    PyObject* obj = PyObject_CallMethodObjArgs (BSON_CLASS,
+                                                PyUnicode_FromString ("encode"),
+                                                o,
+                                                NULL);
+    return obj;
+}
 
 PyObject*
 pickleLoads (const char* buf, size_t len)
@@ -173,6 +214,8 @@ serializeBytes (PyObject* o, void*& v, size_t& l)
     v = (void*)res;
     l = objLen;
 
+    // cout << objLen << endl;
+
     return true;
 }
 
@@ -232,3 +275,34 @@ deserializeBytes (void* buf, size_t len)
 
     return res;
 }
+
+#if WITH_BSON
+bool
+serializeBsonVal (PyObject* o, void*& v, size_t& l)
+{
+    if (!PyDict_Check (o))
+        return false;
+
+    PyObject* bson = bsonEncodeObject (o);
+    if (bson == NULL)
+        return false;
+
+    return serializeBytes (bson, v, l);
+}
+
+PyObject*
+deserializeBson (void* buf, size_t len)
+{
+    PyObject* res = deserializeBytes (buf, len);
+    if (res == NULL)
+        return NULL;
+
+    if (!initBson ())
+        return NULL;
+
+    return PyObject_CallMethodObjArgs (BSON_CLASS,
+                                       PyUnicode_FromString ("decode"),
+                                       res,
+                                       NULL);
+}
+#endif

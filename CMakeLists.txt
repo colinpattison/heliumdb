@@ -3,7 +3,7 @@ project(heliumdb CXX)
 
 # compile options
 option(DEBUG "Enable debug build" OFF)
-option(TESTS "Enable unittests" OFF)
+option(BSON "Enable bson support" OFF)
 set(PYTHON_VER "3" CACHE STRING "Python version to build with")
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
@@ -18,6 +18,25 @@ else ()
   message(STATUS "heliumdb DEBUG: OFF")
   add_compile_options(-g -O3)
 endif (DEBUG)
+
+if (BSON)
+    find_library (BSON_LIB bson-1.0)
+    find_path (
+        BSON_INCLUDE
+        NAMES "bson.h"
+        PATH_SUFFIXES "libbson-1.0")
+
+    if (BSON_LIB AND BSON_INCLUDE)
+        message (STATUS "libbson-1.0 found: ${BSON_LIB}")
+        message (STATUS "bson.h found: ${BSON_INCLUDE}")
+        include_directories(SYSTEM ${BSON_INCLUDE})
+        add_compile_options (-DWITH_BSON)
+    elseif (NOT BSON_LIB)
+        message (FATAL_ERROR "failed to find libbson")
+    elseif (NOT BSON_INCLUDE)
+        message (FATAL_ERROR "failed to find bson.h")
+    endif (BSON_LIB AND BSON_INCLUDE)
+endif (BSON)
 
 # allow external projects
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)

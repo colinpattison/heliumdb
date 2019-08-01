@@ -11,6 +11,10 @@
 #include "utils.h"
 #include "exception.h"
 
+#if WITH_BSON
+#include "bson.h"
+#endif
+
 extern PyTypeObject heliumdbPyType;
 
 extern PyTypeObject heliumdbIterKeyType;
@@ -27,6 +31,7 @@ typedef struct
 {
     PyObject_HEAD
         he_t         mDatastore;
+        const char*  mIndexField;
         serializer   mKeySerializer;
         deserializer mKeyDeserializer;
         serializer   mValSerializer;
