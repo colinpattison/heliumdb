@@ -5,7 +5,7 @@ set (SOURCES
     )
 
 add_library (heliumdb SHARED ${SOURCES})
-target_link_libraries(heliumdb ${LIBHE})
+target_link_libraries(heliumdb ${LIB_HE})
 set_target_properties (heliumdb PROPERTIES PREFIX "")
 set_target_properties (heliumdb PROPERTIES SUFFIX ".so")
 

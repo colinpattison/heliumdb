@@ -54,6 +54,27 @@ set(INCLUDE_PATHS
     ${CMAKE_INSTALL_PREFIX}/include
 )
 
+find_library(LIB_HE
+             NAMES he
+             PATHS /usr /usr/local
+             )
+if(NOT LIB_HE)
+    message(FATAL_ERROR "Failed to find libhe")
+else()
+    message(STATUS "Found libhe: ${LIB_HE}")
+endif(NOT LIB_HE)
+
+find_path(HE_H
+          NAMES he.h
+          PATHS /usr /usr/local
+          )
+if(NOT HE_H)
+    message(FATAL_ERROR "failed to find he.h")
+else()
+    message(STATUS "Found he.h: ${HE_H}")
+    include_directories(${HE_H})
+endif(NOT HE_H)
+
 SET(CMAKE_INSTALL_RPATH "/usr/lib")
 
 configure_file(
