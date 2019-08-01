@@ -5,7 +5,7 @@ set (SOURCES
     )
 
 add_library (heliumdb SHARED ${SOURCES})
-target_link_libraries(heliumdb he)
+target_link_libraries(heliumdb ${LIB_HE})
 set_target_properties (heliumdb PROPERTIES PREFIX "")
 
 install (TARGETS heliumdb DESTINATION lib/python)
