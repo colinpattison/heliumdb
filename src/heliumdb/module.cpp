@@ -783,7 +783,8 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         }
 
         PyObject* dt = PyDict_GetItem (dict, idx);
-        millisFromMidnight (dt, millis);
+        millis = PyLong_AsLongLong (dt);
+        // millisFromMidnight (dt, millis);
 
         // round down to nearest 10
         key = (millis / 10) * 10;
@@ -791,6 +792,7 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         if (lastKey == 0)
             lastKey = key;
 
+        bson_t* bval;
         if (key != lastKey)
         {
             // new millisecond
@@ -801,7 +803,7 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
                 return NULL;
 
             bson_reinit (&parent);
-            bson_reinit (&children);
+            // bson_reinit (&children);
 
             bson_append_array_begin (&parent, "data", 4, &children);
 
@@ -810,20 +812,24 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
             sidx.str ("");
 
             sidx << count;
+            bval = dictToBson (dict);
             bson_append_document (&children,
                                   sidx.str ().c_str (),
                                   sidx.str ().length (),
-                                  dictToBson (dict));
+                                  bval);
+            bson_destroy (bval);
         }
         else
         {
             sidx.str ("");
             sidx << count;
 
+            bval = dictToBson (dict);
             bson_append_document (&children,
                                   sidx.str ().c_str (),
                                   sidx.str ().length (),
-                                  dictToBson (dict));
+                                  bval);
+            bson_destroy (bval);
         }
 
         count++;
@@ -834,6 +840,9 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     item.key_len = sizeof (key);
     if (!_heliumUpdateBsonDoc (self->mDatastore, item, parent))
         return NULL;
+
+    bson_destroy (&parent);
+    // bson_destroy (&children);
 
     Py_INCREF (Py_None);
     return Py_None;
@@ -868,9 +877,9 @@ heliumdb_insert_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     }
 
     PyObject* dt = PyDict_GetItem (data, idx);
-    int64_t millis;
-    millisFromMidnight (dt, millis);
-
+    // int64_t millis;
+    // millisFromMidnight (dt, millis);
+    int64_t millis = PyLong_AsLongLong (dt);
     int64_t key = (millis / 10) * 10;
 
     bson_t parent;

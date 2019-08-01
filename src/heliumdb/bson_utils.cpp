@@ -162,5 +162,6 @@ dictToBson (PyObject* d)
         return false;
     }
 
+    Py_DECREF (bson);
     return bson_new_from_data ((uint8_t*)bytes, len);
 }
