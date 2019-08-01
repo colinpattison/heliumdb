@@ -3,7 +3,7 @@
 #include "Python.h"
 #include "he.h"
 
-bool initBson ();
+bool initCdr ();
 
 PyObject* pickleDumps (PyObject* obj);
 

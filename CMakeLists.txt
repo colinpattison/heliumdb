@@ -5,6 +5,7 @@ project(heliumdb CXX)
 option(DEBUG "Enable debug build" OFF)
 option(TESTS "Enable unittests" OFF)
 set(PYTHON_CONFIG "python3-config" CACHE STRING "python-config executable build with")
+option(CDR "Enable cdr support" OFF)
 
 if (CMAKE_INSTALL_PREFIX_INITIALIZED_TO_DEFAULT)
   set (CMAKE_INSTALL_PREFIX "${CMAKE_BINARY_DIR}/install" CACHE PATH "default install path" FORCE )
@@ -19,25 +20,6 @@ else ()
   add_compile_options(-g -O3)
 endif (DEBUG)
 
-if (BSON)
-    find_library (BSON_LIB bson-1.0)
-    find_path (
-        BSON_INCLUDE
-        NAMES "bson.h"
-        PATH_SUFFIXES "libbson-1.0")
-
-    if (BSON_LIB AND BSON_INCLUDE)
-        message (STATUS "libbson-1.0 found: ${BSON_LIB}")
-        message (STATUS "bson.h found: ${BSON_INCLUDE}")
-        include_directories(SYSTEM ${BSON_INCLUDE})
-        add_compile_options (-DWITH_BSON)
-    elseif (NOT BSON_LIB)
-        message (FATAL_ERROR "failed to find libbson")
-    elseif (NOT BSON_INCLUDE)
-        message (FATAL_ERROR "failed to find bson.h")
-    endif (BSON_LIB AND BSON_INCLUDE)
-endif (BSON)
-
 # allow external projects
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
 
@@ -48,6 +30,27 @@ endif()
 if(NOT SUBMODULE_PREFIX_DIR)
     set(SUBMODULE_PREFIX_DIR ${CMAKE_BINARY_DIR})
 endif()
+
+link_directories(
+    ${CMAKE_INSTALL_PREFIX}/lib
+    )
+
+if (CDR)
+    #cdr
+    set(CDR_CMAKE ${SUBMODULE_ROOT_DIR}/ext/cdr CACHE PATH "Location of cdr-cmake" FORCE)
+    message(STATUS "cdr-location: " ${CDR_CMAKE})
+    ExternalProject_Add(
+      CDR_PROJECT
+      PREFIX ${SUBMODULE_PREFIX_DIR}
+      SOURCE_DIR ${CDR_CMAKE}
+      CMAKE_ARGS -DPYTHON=on -DSUBMODULE_PREFIX_DIR=${SUBMODULE_PREFIX_DIR} -DSUBMODULE_ROOT_DIR=${SUBMODULE_ROOT_DIR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${SUBMODULE_FLAGS}
+      )
+    ExternalProject_Get_Property(CDR_PROJECT binary_dir)
+    set(CDR_PROJECT_DIR ${binary_dir}/lib/cmake/cdr CACHE PATH "location of cdr cmake files" FORCE)
+    set(CPACK_INSTALL_CMAKE_PROJECTS ${CPACK_INSTALL_CMAKE_PROJECTS} "${binary_dir};cdr;ALL;/")
+
+    include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
+endif (CDR)
 
 include(${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake)
 
