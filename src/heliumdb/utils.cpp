@@ -53,10 +53,12 @@ bsonEncodeObject (PyObject* o)
     if (!initBson ())
         return NULL;
 
+    PyObject* func = PyUnicode_FromString ("encode");
     PyObject* obj = PyObject_CallMethodObjArgs (BSON_CLASS,
-                                                PyUnicode_FromString ("encode"),
+                                                func,
                                                 o,
                                                 NULL);
+    Py_DECREF (func);
     return obj;
 }
 
