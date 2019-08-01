@@ -40,6 +40,15 @@ endif (BSON)
 
 # allow external projects
 include(${CMAKE_ROOT}/Modules/ExternalProject.cmake)
+
+#deps
+if(NOT SUBMODULE_ROOT_DIR)
+    set(SUBMODULE_ROOT_DIR ${PROJECT_SOURCE_DIR})
+endif()
+if(NOT SUBMODULE_PREFIX_DIR)
+    set(SUBMODULE_PREFIX_DIR ${CMAKE_BINARY_DIR})
+endif()
+
 include(${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake)
 
 # Find dependencies
@@ -80,6 +89,25 @@ configure_file(
   ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Config-install.cmake
   @ONLY
   )
+
+#cdr
+set(CDR_CMAKE ${SUBMODULE_ROOT_DIR}/ext/cdr CACHE PATH "Location of cdr-cmake" FORCE)
+message(STATUS "cdr-location: " ${CDR_CMAKE})
+ExternalProject_Add(
+  CDR_PROJECT
+  PREFIX ${SUBMODULE_PREFIX_DIR}
+  SOURCE_DIR ${CDR_CMAKE}
+  CMAKE_ARGS -DSUBMODULE_PREFIX_DIR=${SUBMODULE_PREFIX_DIR} -DSUBMODULE_ROOT_DIR=${SUBMODULE_ROOT_DIR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${SUBMODULE_FLAGS}
+  )
+ExternalProject_Get_Property(CDR_PROJECT binary_dir)
+set(CDR_PROJECT_DIR ${binary_dir}/lib/cmake/cdr CACHE PATH "location of cdr cmake files" FORCE)
+set(CPACK_INSTALL_CMAKE_PROJECTS ${CPACK_INSTALL_CMAKE_PROJECTS} "${binary_dir};cdr;ALL;/")
+
+include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
+
+link_directories(
+    ${CMAKE_INSTALL_PREFIX}/lib
+    )
 
 # add source
 add_subdirectory(src)

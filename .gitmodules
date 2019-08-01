@@ -1,0 +1,3 @@
+[submodule "ext/cdr"]
+	path = ext/cdr
+	url = https://github.com/blu-corner/cdr.git
