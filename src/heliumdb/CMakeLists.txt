@@ -4,7 +4,7 @@ set (SOURCES
      iter.cpp
     )
 
-set (LINK_LIBS he)
+set (LINK_LIBS he cdr)
 
 if (BSON)
     set (LINK_LIBS ${LINK_LIBS} bson-1.0)
