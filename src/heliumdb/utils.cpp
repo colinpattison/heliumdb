@@ -7,8 +7,9 @@
 using namespace std;
 
 static PyObject* PICKLE_MODULE = NULL;
-static PyObject* BSON_MODULE = NULL;
-static PyObject* BSON_CLASS = NULL;
+// static PyObject* CDR_MODULE = NULL;
+// static PyObject* CDR_CLASS = NULL;
+static PyObject* CDR_MODULE = NULL;
 
 PyObject*
 pickleDumps (PyObject* obj)
@@ -24,43 +25,32 @@ pickleDumps (PyObject* obj)
 }
 
 bool
-initBson ()
+initCdr ()
 {
-    if (BSON_MODULE == NULL &&
-        (BSON_MODULE = PyImport_ImportModuleNoBlock ("bson")) == NULL)
+    if (CDR_MODULE == NULL &&
+        (CDR_MODULE = PyImport_ImportModuleNoBlock ("cdr")) == NULL)
     {
-        PyErr_SetString (HeliumDbException, "failed to import bson");
-        return false;
-    }
-
-    PyObject* pDict = PyModule_GetDict (BSON_MODULE);
-    if (pDict == NULL)
-        return false;
-
-    if (BSON_CLASS == NULL &&
-        (BSON_CLASS = PyDict_GetItemString (pDict, "BSON")) == NULL)
-    {
-        PyErr_SetString (HeliumDbException, "failed to retrieve bson.BSON");
+        PyErr_SetString (HeliumDbException, "failed to import cdr");
         return false;
     }
 
     return true;
 }
 
-PyObject*
-bsonEncodeObject (PyObject* o)
-{
-    if (!initBson ())
-        return NULL;
-
-    PyObject* func = PyUnicode_FromString ("encode");
-    PyObject* obj = PyObject_CallMethodObjArgs (BSON_CLASS,
-                                                func,
-                                                o,
-                                                NULL);
-    Py_DECREF (func);
-    return obj;
-}
+// PyObject*
+// bsonEncodeObject (PyObject* o)
+// {
+//     if (!initBson ())
+//         return NULL;
+//
+//     PyObject* func = PyUnicode_FromString ("encode");
+//     PyObject* obj = PyObject_CallMethodObjArgs (CDR_CLASS,
+//                                                 func,
+//                                                 o,
+//                                                 NULL);
+//     Py_DECREF (func);
+//     return obj;
+// }
 
 PyObject*
 pickleLoads (const char* buf, size_t len)
@@ -278,33 +268,33 @@ deserializeBytes (void* buf, size_t len)
     return res;
 }
 
-#if WITH_BSON
-bool
-serializeBsonVal (PyObject* o, void*& v, size_t& l)
-{
-    if (!PyDict_Check (o))
-        return false;
+#if WITH_CDR
+// bool
+// serializeBsonVal (PyObject* o, void*& v, size_t& l)
+// {
+//     if (!PyDict_Check (o))
+//         return false;
+//
+//     PyObject* bson = bsonEncodeObject (o);
+//     if (bson == NULL)
+//         return false;
+//
+//     return serializeBytes (bson, v, l);
+// }
 
-    PyObject* bson = bsonEncodeObject (o);
-    if (bson == NULL)
-        return false;
-
-    return serializeBytes (bson, v, l);
-}
-
-PyObject*
-deserializeBson (void* buf, size_t len)
-{
-    PyObject* res = deserializeBytes (buf, len);
-    if (res == NULL)
-        return NULL;
-
-    if (!initBson ())
-        return NULL;
-
-    return PyObject_CallMethodObjArgs (BSON_CLASS,
-                                       PyUnicode_FromString ("decode"),
-                                       res,
-                                       NULL);
-}
+// PyObject*
+// deserializeBson (void* buf, size_t len)
+// {
+//     PyObject* res = deserializeBytes (buf, len);
+//     if (res == NULL)
+//         return NULL;
+//
+//     if (!initBson ())
+//         return NULL;
+//
+//     return PyObject_CallMethodObjArgs (CDR_CLASS,
+//                                        PyUnicode_FromString ("decode"),
+//                                        res,
+//                                        NULL);
+// }
 #endif
