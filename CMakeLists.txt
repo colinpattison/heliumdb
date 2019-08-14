@@ -51,11 +51,6 @@ include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
 
 include(${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake)
 
-# Find dependencies
-find_package(PythonInterp ${PYTHON_VER} REQUIRED)
-find_package(PythonLibs ${PYTHON_VER} REQUIRED)
-include_directories(SYSTEM ${PYTHON_INCLUDE_PATH})
-
 set(INCLUDE_PATHS
     ${PROJECT_SOURCE_DIR}/src/heliumdb/
     ${CMAKE_INSTALL_PREFIX}/include

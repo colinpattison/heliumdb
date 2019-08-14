@@ -47,6 +47,6 @@ link_libraries(${PYTHON_LDFLAGS})
 
 add_library (heliumdb SHARED ${SOURCES})
 target_link_libraries(heliumdb ${LINK_LIBS})
-set_target_properties (heliumdb PROPERTIES PREFIX "")
+set_target_properties (heliumdb PROPERTIES PREFIX "" SUFFIX ".so")
 
 install (TARGETS heliumdb DESTINATION lib/python)
