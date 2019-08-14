@@ -7,9 +7,6 @@
 using namespace std;
 
 static PyObject* PICKLE_MODULE = NULL;
-// static PyObject* CDR_MODULE = NULL;
-// static PyObject* CDR_CLASS = NULL;
-static PyObject* CDR_MODULE = NULL;
 
 PyObject*
 pickleDumps (PyObject* obj)
@@ -23,34 +20,6 @@ pickleDumps (PyObject* obj)
                                        obj,
                                        NULL);
 }
-
-bool
-initCdr ()
-{
-    if (CDR_MODULE == NULL &&
-        (CDR_MODULE = PyImport_ImportModuleNoBlock ("cdr")) == NULL)
-    {
-        PyErr_SetString (HeliumDbException, "failed to import cdr");
-        return false;
-    }
-
-    return true;
-}
-
-// PyObject*
-// bsonEncodeObject (PyObject* o)
-// {
-//     if (!initBson ())
-//         return NULL;
-//
-//     PyObject* func = PyUnicode_FromString ("encode");
-//     PyObject* obj = PyObject_CallMethodObjArgs (CDR_CLASS,
-//                                                 func,
-//                                                 o,
-//                                                 NULL);
-//     Py_DECREF (func);
-//     return obj;
-// }
 
 PyObject*
 pickleLoads (const char* buf, size_t len)
@@ -267,34 +236,3 @@ deserializeBytes (void* buf, size_t len)
 
     return res;
 }
-
-#if WITH_CDR
-// bool
-// serializeBsonVal (PyObject* o, void*& v, size_t& l)
-// {
-//     if (!PyDict_Check (o))
-//         return false;
-//
-//     PyObject* bson = bsonEncodeObject (o);
-//     if (bson == NULL)
-//         return false;
-//
-//     return serializeBytes (bson, v, l);
-// }
-
-// PyObject*
-// deserializeBson (void* buf, size_t len)
-// {
-//     PyObject* res = deserializeBytes (buf, len);
-//     if (res == NULL)
-//         return NULL;
-//
-//     if (!initBson ())
-//         return NULL;
-//
-//     return PyObject_CallMethodObjArgs (CDR_CLASS,
-//                                        PyUnicode_FromString ("decode"),
-//                                        res,
-//                                        NULL);
-// }
-#endif

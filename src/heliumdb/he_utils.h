@@ -24,3 +24,14 @@ he_utils_update (he_t& he, he_item& item)
     }
     return true;
 }
+
+bool
+he_utils_exists (he_t& he, he_item& item)
+{
+    int rc;
+    Py_BEGIN_ALLOW_THREADS
+    rc = he_exists (he, &item);
+    Py_END_ALLOW_THREADS
+
+    return (rc == 0);
+}

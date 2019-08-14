@@ -35,22 +35,21 @@ link_directories(
     ${CMAKE_INSTALL_PREFIX}/lib
     )
 
-if (CDR)
-    #cdr
-    set(CDR_CMAKE ${SUBMODULE_ROOT_DIR}/ext/cdr CACHE PATH "Location of cdr-cmake" FORCE)
-    message(STATUS "cdr-location: " ${CDR_CMAKE})
-    ExternalProject_Add(
-      CDR_PROJECT
-      PREFIX ${SUBMODULE_PREFIX_DIR}
-      SOURCE_DIR ${CDR_CMAKE}
-      CMAKE_ARGS -DPYTHON=on -DSUBMODULE_PREFIX_DIR=${SUBMODULE_PREFIX_DIR} -DSUBMODULE_ROOT_DIR=${SUBMODULE_ROOT_DIR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${SUBMODULE_FLAGS}
-      )
-    ExternalProject_Get_Property(CDR_PROJECT binary_dir)
-    set(CDR_PROJECT_DIR ${binary_dir}/lib/cmake/cdr CACHE PATH "location of cdr cmake files" FORCE)
-    set(CPACK_INSTALL_CMAKE_PROJECTS ${CPACK_INSTALL_CMAKE_PROJECTS} "${binary_dir};cdr;ALL;/")
+#cdr
+set(CDR_CMAKE ${SUBMODULE_ROOT_DIR}/ext/cdr CACHE PATH "Location of cdr-cmake" FORCE)
+message(STATUS "cdr-location: " ${CDR_CMAKE})
+ExternalProject_Add(
+  CDR_PROJECT
+  PREFIX ${SUBMODULE_PREFIX_DIR}
+  SOURCE_DIR ${CDR_CMAKE}
+  CMAKE_ARGS -DDEBUG=on -DPYTHON=on -DPYTHON_CONFIG=${PYTHON_CONFIG} -DSUBMODULE_PREFIX_DIR=${SUBMODULE_PREFIX_DIR} -DSUBMODULE_ROOT_DIR=${SUBMODULE_ROOT_DIR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${SUBMODULE_FLAGS}
+  )
+ExternalProject_Get_Property(CDR_PROJECT binary_dir)
+set(CDR_PROJECT_DIR ${binary_dir}/lib/cmake/cdr CACHE PATH "location of cdr cmake files" FORCE)
+set(CPACK_INSTALL_CMAKE_PROJECTS ${CPACK_INSTALL_CMAKE_PROJECTS} "${binary_dir};cdr;ALL;/")
 
-    include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
-endif (CDR)
+include_directories(${CMAKE_INSTALL_PREFIX}/include)
+include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
 
 include(${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake)
 
