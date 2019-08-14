@@ -2,11 +2,9 @@
 #include "datetime.h"
 #include <utility>
 #include <sstream>
+#include <iostream>
 #include "he_utils.h"
-#if WITH_CDR
 #include "cdr_utils.h"
-#include "swigPyRuntime.h"
-#endif
 
 using namespace std;
 
@@ -33,14 +31,14 @@ setEnvVariable (PyObject* kwargs, const char* param, uint64_t val, uint64_t& o)
 }
 
 bool
-millisFromMidnight (PyObject* dt, int64_t& millis)
+millisFromMidnight (cdrDateTime& dt, int64_t& millis)
 {
-    int hour = PyDateTime_DATE_GET_HOUR (dt);
-    int mins = PyDateTime_DATE_GET_MINUTE (dt);
-    int secs = PyDateTime_DATE_GET_SECOND (dt);
-    int micros = PyDateTime_DATE_GET_MICROSECOND (dt);
+    int hour = dt.mHour;
+    int mins = dt.mMinute;
+    int secs = dt.mSecond;
+    int nanos = dt.mNanosecond;
 
-    millis = (hour * 3600  * 1000) + (mins * 60 * 1000) + (secs * 1000) + int (micros / 1000);
+    millis = (hour * 3600  * 1000) + (mins * 60 * 1000) + (secs * 1000) + int (nanos / 1000000);
     return true;
 }
 
@@ -64,12 +62,8 @@ heliumdbPy_init (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     char* datastore = NULL;
     char* key_type = NULL;
     char* val_type = NULL;
-#if WITH_CDR
-    char* index_field = NULL;
-    string argString ("|sssssKKKKKKKKKK");
-#else
-    string argString ("|ssssKKKKKKKKKK");
-#endif
+    int64_t index_field = 0;
+    string argString ("|ssssLKKKKKKKKKK");
     
     uint64_t fanout;
     uint64_t gc_fanout;
@@ -87,9 +81,7 @@ heliumdbPy_init (heliumdbPy* self, PyObject* args, PyObject* kwargs)
                       (char*)"datastore",
                       (char*)"key_type",
                       (char*)"val_type",
-#if WITH_CDR
                       (char*)"index_field",
-#endif
                       (char*)"fanout",
                       (char*)"gc_fanout",
                       (char*)"write_cache",
@@ -111,9 +103,7 @@ heliumdbPy_init (heliumdbPy* self, PyObject* args, PyObject* kwargs)
                                      &datastore,
                                      &key_type,
                                      &val_type,
-#if WITH_CDR
                                      &index_field,
-#endif
                                      &fanout,
                                      &gc_fanout,
                                      &write_cache,
@@ -165,14 +155,7 @@ heliumdbPy_init (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         }
     }
 
-#if WITH_CDR
-    if (index_field == NULL)
-    {
-        PyErr_SetString (HeliumDbException, "missing required index_field");
-        return -1;
-    }
     self->mIndexField = index_field;
-#endif
 
     if (key_type == NULL || strcmp (key_type, "O") == 0)
     {
@@ -230,13 +213,10 @@ heliumdbPy_init (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         self->mValSerializer = &serializeFloatVal;
         self->mValDeserializer = &deserializeFloat;
     }
-#if WITH_CDR
-    else if (strcmp (val_type, "B") == 0)
+    else if (strcmp (val_type, "C") == 0)
     {
-        self->mValSerializer = &serializeBsonVal;
-        self->mValDeserializer = &deserializeBson;
+        self->mValDeserializer = &cdr_utils_deserializeCdr;
     }
-#endif
     else
     {
         PyErr_SetString (HeliumDbException, "unsupported val_type");
@@ -450,12 +430,7 @@ _retrieveItem (he_t& he, he_item& getItem)
 PyObject*
 heliumdb_subscript (heliumdbPy* self, PyObject* k)
 {
-    // char*   buffer[8096] = {0};
-    // size_t  rdSize = sizeof (buffer);
-    // void*   buf = NULL;
-
     he_item getItem;
-    // getItem.val = (void*)buffer;
     if (!self->mKeySerializer (k, getItem.key, getItem.key_len))
     {
         PyErr_SetString (HeliumDbException, "could not serialize key object");
@@ -464,40 +439,12 @@ heliumdb_subscript (heliumdbPy* self, PyObject* k)
 
     _retrieveItem (self->mDatastore, getItem);
 
-    // int rc;
-    // for (;;)
-    // {
-	// 	Py_BEGIN_ALLOW_THREADS
-    //     rc = he_lookup (self->mDatastore, &getItem, 0, rdSize);
-    //     Py_END_ALLOW_THREADS
-    //
-    //     if (rc != 0)
-    //     {
-    //         PyErr_SetString (HeliumDbException, "he_lookup failed");
-    //         return NULL;
-    //     }
-    //
-    //     if (getItem.val_len > rdSize)
-    //     {
-    //         rdSize = getItem.val_len;
-    //         buf = malloc (rdSize);
-    //         getItem.val = buf;
-    //     }
-    //     else
-    //     {
-    //         break;
-    //     }
-    // }
-
     PyObject* obj = self->mValDeserializer (getItem.val, getItem.val_len);
     if (obj == NULL)
     {
         PyErr_SetString (HeliumDbException, "failed to deserialize value object");
         return NULL;
     }
-
-    // if (buf)
-    //     free (buf);
 
     return obj;
 }
@@ -719,15 +666,27 @@ heliumdb_sizeof (heliumdbPy* self)
     return PyLong_FromUnsignedLongLong (stats.valid_items);
 }
 
-#if WITH_CDR
 bool
-// _heliumUpdateBsonDoc (he_t& he, he_item& item, bson_t& doc)
-// {
-//     item.val = (void*)bson_get_data (&doc);
-//     item.val_len = doc.len;
-//
-//     return he_utils_update (he, item);
-// }
+_heliumUpdateCdr (he_t& he, he_item& item, cdr& d)
+{
+    char* space = new char[d.serializedSize ()];
+    size_t used = 0;
+    if (!d.serialize (space, used, true))
+    {
+        PyErr_SetString (HeliumDbException, "failed to serialize cdr");
+        return false;
+    }
+
+    item.val = (void*)space;
+    item.val_len = used;
+
+    if (!he_utils_update (he, item))
+        return false;
+
+    delete[] space;
+
+    return true;
+}
 
 PyObject*
 heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
@@ -750,472 +709,337 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         return NULL;
     }
 
-    // bson_t parent;
-    // bson_t children;
-    //
-    // bson_init (&parent);
-    // bson_append_array_begin (&parent, "data", 4, &children);
-
     int64_t         millis;
     int64_t         lastKey = 0;
     int64_t         key;
-    int             count = 0;
-    stringstream    sidx;
+    he_item         item;
+    cdr             entries;
+    cdr*            d;
 
-    PyObject* idx = PyUnicode_FromString (self->mIndexField);
-
-    he_item item;
     for (int i = 0; i < PyList_Size (data); i++)
     {
-        SwigPyObject* d = (SwigPyObject*)PyList_GetItem (data, i);
+        PyObject* pycdr = PyList_GetItem (data, i);
 
-        // swig_type_info* i = SWIG_TypeQuery ("_p_neueda__cdr");
-        // if (!i)
+        // if (!cdr_check (pycdr))
         //     return NULL;
 
-        // if (!PyDict_Check (dict))
-        // {
-        //     PyErr_SetString (HeliumDbException, "unexpected type");
-        //     return NULL;
-        // }
-        //
-        // if (!PyDict_Contains (dict, idx))
-        // {
-        //     PyErr_SetString (HeliumDbException, "index field not present");
-        //     return NULL;
-        // }
+        if (!cdr_utils_toCdr (pycdr, d))
+        {
+            PyErr_SetString (HeliumDbException, "failed to retrieve cdr object");
+            return NULL;
+        }
 
-        // PyObject* dt = PyDict_GetItem (dict, idx);
-        // millis = PyLong_AsLongLong (dt);
-        // // millisFromMidnight (dt, millis);
-        //
-        // // round down to nearest 10
-        // key = (millis / 10) * 10;
-        //
-        // if (lastKey == 0)
-        //     lastKey = key;
-        //
-        // bson_t* bval;
-        // if (key != lastKey)
+        // cdrDateTime t;
+        // if (!d->getDateTime (self->mIndexField, t))
         // {
-        //     // new millisecond
-        //     bson_append_array_end (&parent, &children);
-        //     item.key = &lastKey;
-        //     item.key_len = sizeof (lastKey);
-        //     if (!_heliumUpdateBsonDoc (self->mDatastore, item, parent))
-        //         return NULL;
-        //
-        //     bson_reinit (&parent);
-        //     // bson_reinit (&children);
-        //
-        //     bson_append_array_begin (&parent, "data", 4, &children);
-        //
-        //     count = 0;
-        //     lastKey = key;
-        //     sidx.str ("");
-        //
-        //     sidx << count;
-        //     bval = dictToBson (dict);
-        //     bson_append_document (&children,
-        //                           sidx.str ().c_str (),
-        //                           sidx.str ().length (),
-        //                           bval);
-        //     bson_destroy (bval);
+        //     PyErr_SetString (HeliumDbException, "failed to retrieve index field");
+        //     return NULL;
         // }
-        // else
-        // {
-        //     sidx.str ("");
-        //     sidx << count;
-        //
-        //     bval = dictToBson (dict);
-        //     bson_append_document (&children,
-        //                           sidx.str ().c_str (),
-        //                           sidx.str ().length (),
-        //                           bval);
-        //     bson_destroy (bval);
-        // }
-        //
-        // count++;
+        // millisFromMidnight (t, millis);
+        if (!d->getInteger (self->mIndexField, millis))
+        {
+            PyErr_SetString (HeliumDbException, "failed to retrieve index field");
+            return NULL;
+        }
+
+
+        // round down to nearest 10
+        key = (millis / 10) * 10;
+
+        if (lastKey == 0)
+            lastKey = key;
+
+        if (key != lastKey)
+        {
+            // new millisecond
+            item.key = &lastKey;
+            item.key_len = sizeof (lastKey);
+
+            if (!_heliumUpdateCdr (self->mDatastore, item, entries))
+                return NULL;
+
+            entries.clear ();
+            lastKey = key;
+        }
+
+        entries.appendArray (0, *d);
     }
 
-    // bson_append_array_end (&parent, &children);
-    // item.key = &key;
-    // item.key_len = sizeof (key);
-    // if (!_heliumUpdateBsonDoc (self->mDatastore, item, parent))
-    //     return NULL;
-    //
-    // bson_destroy (&parent);
-    // // bson_destroy (&children);
-    //
+    item.key = &key;
+    item.key_len = sizeof (key);
+
+    if (!_heliumUpdateCdr (self->mDatastore, item, entries))
+        return NULL;
+
     Py_INCREF (Py_None);
     return Py_None;
 }
 
-// PyObject*
-// heliumdb_insert_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
-// {
-//     PyObject* data = Py_None;
-//
-//     char *kwlist[] = {(char*)"data",
-//                       NULL};
-//
-//     if (!PyArg_ParseTupleAndKeywords(args,
-//                                      kwargs,
-//                                      "|O",
-//                                      kwlist,
-//                                      &data))
-//         return NULL;
-//
-//     if (!PyDict_Check (data))
-//     {
-//         PyErr_SetString (HeliumDbException, "Unexpected type");
-//         return NULL;
-//     }
-//
-//     PyObject* idx = PyUnicode_FromString (self->mIndexField);
-//     if (!PyDict_Contains (data, idx))
-//     {
-//         PyErr_SetString (HeliumDbException, "index field not present");
-//         return NULL;
-//     }
-//
-//     PyObject* dt = PyDict_GetItem (data, idx);
-//     // int64_t millis;
-//     // millisFromMidnight (dt, millis);
-//     int64_t millis = PyLong_AsLongLong (dt);
-//     int64_t key = (millis / 10) * 10;
-//
-//     bson_t parent;
-//     bson_t children;
-//     bson_init (&parent);
-//
-//     bson_t* bdata = dictToBson (data);
-//     bson_append_array_begin (&parent, "data", 4, &children);
-//     bson_append_document (&children, "0", 1, bdata);
-//     bson_append_array_end (&parent, &children);
-//
-//     he_item item;
-//     item.key = &key;
-//     item.key_len = sizeof (key);
-//     if (!_heliumUpdateBsonDoc (self->mDatastore, item, parent))
-//         return NULL;
-//
-//     Py_INCREF (Py_None);
-//     return Py_None;
-// }
+PyObject*
+heliumdb_insert_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
+{
+    PyObject* data = Py_None;
 
-// bool
-// compareResults (pair<int64_t, PyObject*> x, pair<int64_t, PyObject*> y)
-// {
-//     return (x.first < y.first);
-// }
-//
-// PyObject*
-// heliumdb_find (heliumdbPy* self, PyObject* args, PyObject* kwargs)
-// {
-//     PyObject* qdict = NULL;
-//     he_iter_t itr;
-//
-//     char *kwlist[] = {(char*)"data",
-//                       NULL};
-//
-//     if (!PyArg_ParseTupleAndKeywords(args,
-//                                      kwargs,
-//                                      "|O",
-//                                      kwlist,
-//                                      &qdict))
-//         return NULL;
-//
-//     if (!PyDict_Check (qdict))
-//         return NULL;
-//
-//     bson_t* query = dictToBson (qdict);
-//
-//     Py_BEGIN_ALLOW_THREADS
-//     itr = he_iter_open (self->mDatastore, NULL, 0, HE_MAX_KEY_LEN, 0);
-//     Py_END_ALLOW_THREADS
-//     if (!itr)
-//     {
-//         PyErr_SetString (HeliumDbException, "failed to open iterator");
-//         return NULL;
-//     }
-//
-//     const he_item* item;
-//
-//     const uint8_t* docData;
-//     uint32_t docLen;
-//
-//     bson_t* doc;
-//     bson_t* arr;
-//     bson_t* entry;
-//
-//     bson_iter_t iter;
-//     bson_iter_t arrItr;
-//
-//     vector< pair<int64_t, PyObject*> > results;
-//
-//     while ((item = he_iter_next (itr)))
-//     {
-//         doc = bson_new_from_data ((uint8_t*)item->val, item->val_len);
-//         if (bson_iter_init_find (&iter, doc, "data"))
-//         {
-//             bson_iter_document (&iter, &docLen, &docData);
-//             if (!CDR_ITER_HOLDS_ARRAY (&iter))
-//                 continue;
-//
-//             bson_iter_array (&iter, &docLen, &docData);
-//             arr = bson_new_from_data (docData, docLen);
-//
-//             bson_iter_init (&arrItr, arr);
-//             while (bson_iter_next (&arrItr))
-//             {
-//                 if (!CDR_ITER_HOLDS_DOCUMENT (&arrItr))
-//                     continue;
-//
-//                 bson_iter_document (&arrItr, &docLen, &docData);
-//                 entry = bson_new_from_data (docData, docLen);
-//
-//                 if (bson_query (entry, query))
-//                 {
-//                     PyObject* dict = deserializeBson ((void*)bson_get_data (entry),
-//                                                       entry->len);
-//                     results.push_back(make_pair (*(int64_t*)item->key, dict));
-//                 }
-//             }
-//         }
-//     }
-//
-//     sort (results.begin (), results.end (), compareResults);
-//     PyObject* sorted_results = PyList_New (0);
-//
-//     vector< pair<int64_t, PyObject*> >::iterator vitr;
-//     for (vitr = results.begin (); vitr != results.end (); vitr++)
-//         PyList_Append (sorted_results, vitr->second);
-//
-//     return sorted_results;
-// }
+    char *kwlist[] = {(char*)"data",
+                      NULL};
 
-// int
-// heliumdb_update (heliumdbPy* self, PyObject* args, PyObject* kwargs)
-// {
-//     PyObject* fdict = NULL;
-//     PyObject* udict = NULL;
-//     he_iter_t itr;
-//
-//     char *kwlist[] = {(char*)"data",
-//                       NULL};
-//
-//     if (!PyArg_ParseTupleAndKeywords(args,
-//                                      kwargs,
-//                                      "|OO",
-//                                      kwlist,
-//                                      fdict,
-//                                      udict))
-//         return NULL;
-//
-//     if (fdict == NULL || udict == NULL)
-//         return NULL;
-//
-//     if (!PyDict_Check (fdict))
-//         return NULL;
-//
-//     if (!PyDict_Check (udict))
-//         return NULL;
-//
-//     bson_t* filter = dictToBson (fdict);
-//     bson_t* update = dictToBson (udict);
-//
-//     Py_BEGIN_ALLOW_THREADS
-//     itr = he_iter_open (self->mDatastore, NULL, 0, 0, 0);
-//     Py_END_ALLOW_THREADS
-//     if (!itr)
-//     {
-//         PyErr_SetString (HeliumDbException, "failed to open iterator");
-//         return NULL;
-//     }
-//
-//     const he_item* item;
-//     bson_t* doc;
-//
-//     bson_iter_t fItr;
-//
-//     while ((item = he_iter_next (itr)))
-//     {
-//         doc = bson_new_from_data ((uint8_t*)item->val, item->val_len);
-//
-//         if (bson_query (doc, query))
-//         {
-//             if (!bson_iter_init (&fItr, filter))
-//             {
-//                 PyErr_SetString (HeliumDbException, "failed bson_iter_init");
-//                 return NULL;
-//             }
-//
-//             while (bson_iter_next (fItr, 
-//
-//
-//         }
-//     }
-//     return results;
-// }
+    if (!PyArg_ParseTupleAndKeywords(args,
+                                     kwargs,
+                                     "|O",
+                                     kwlist,
+                                     &data))
+        return NULL;
 
-// PyObject*
-// heliumdb_find_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
-// {
-//     PyObject* qdict = Py_None;
-//     he_iter_t itr;
-//
-//     char *kwlist[] = {(char*)"data",
-//                       NULL};
-//
-//     if (!PyArg_ParseTupleAndKeywords(args,
-//                                      kwargs,
-//                                      "|O",
-//                                      kwlist,
-//                                      &qdict))
-//         return NULL;
-//
-//     if (!PyDict_Check (qdict))
-//         return NULL;
-//
-//     bson_t* query = dictToBson (qdict);
-//
-//     Py_BEGIN_ALLOW_THREADS
-//     itr = he_iter_open (self->mDatastore, NULL, 0, HE_MAX_VAL_LEN, 0);
-//     Py_END_ALLOW_THREADS
-//     if (!itr)
-//     {
-//         PyErr_SetString (HeliumDbException, "failed to open iterator");
-//         return NULL;
-//     }
-//
-//     const he_item* item;
-//     bson_t* doc;
-//
-//     while ((item = he_iter_next (itr)))
-//     {
-//         doc = bson_new_from_data ((uint8_t*)item->val, item->val_len);
-//
-//         if (bson_query (doc, query))
-//         {
-//             PyObject* dict = deserializeBson ((void*)bson_get_data (doc),
-//                                               doc->len);
-//             return dict;
-//         }
-//     }
-//     Py_INCREF (Py_None);
-//     return Py_None;
-// }
-//
-// int
-// heliumdb_delete_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
-// {
-//     PyObject*       qdict = NULL;
-//     he_iter_t       itr;
-//     const he_item*  item;
-//     bson_t*         doc;
-//     int             rc;
-//
-//     char *kwlist[] = {(char*)"data",
-//                       NULL};
-//
-//     if (!PyArg_ParseTupleAndKeywords(args,
-//                                      kwargs,
-//                                      "|O",
-//                                      kwlist,
-//                                      qdict))
-//         return -1;
-//
-//     if (!PyDict_Check (qdict))
-//         return -1;
-//
-//     bson_t* query = dictToBson (qdict);
-//
-//     Py_BEGIN_ALLOW_THREADS
-//     itr = he_iter_open (self->mDatastore, NULL, 0, HE_MAX_VAL_LEN, 0);
-//     Py_END_ALLOW_THREADS
-//     if (!itr)
-//     {
-//         PyErr_SetString (HeliumDbException, "failed to open iterator");
-//         return -1;
-//     }
-//
-//     while ((item = he_iter_next (itr)))
-//     {
-//         doc = bson_new_from_data ((uint8_t*)item->val, item->val_len);
-//
-//         if (bson_query (doc, query))
-//         {
-//             Py_BEGIN_ALLOW_THREADS
-//             rc = he_delete (self->mDatastore, item);
-//             Py_END_ALLOW_THREADS
-//
-//             if (rc != 0)
-//             {
-//                 PyErr_SetString (HeliumDbException, he_strerror (errno));
-//                 return -1;
-//             }
-//
-//             return 0;
-//         }
-//     }
-//     return 0;
-// }
-//
-// int
-// heliumdb_delete_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
-// {
-//     PyObject*       qdict = NULL;
-//     he_iter_t       itr;
-//     const he_item*  item;
-//     bson_t*         doc;
-//     int             rc;
-//
-//     char *kwlist[] = {(char*)"data",
-//                       NULL};
-//
-//     if (!PyArg_ParseTupleAndKeywords(args,
-//                                      kwargs,
-//                                      "|O",
-//                                      kwlist,
-//                                      &qdict))
-//         return -1;
-//
-//     if (!PyDict_Check (qdict))
-//         return -1;
-//
-//     bson_t* query = dictToBson (qdict);
-//
-//     Py_BEGIN_ALLOW_THREADS
-//     itr = he_iter_open (self->mDatastore, NULL, 0, HE_MAX_VAL_LEN, 0);
-//     Py_END_ALLOW_THREADS
-//     if (!itr)
-//     {
-//         PyErr_SetString (HeliumDbException, "failed to open iterator");
-//         return -1;
-//     }
-//
-//     while ((item = he_iter_next (itr)))
-//     {
-//         doc = bson_new_from_data ((uint8_t*)item->val, item->val_len);
-//
-//         if (bson_query (doc, query))
-//         {
-//             Py_BEGIN_ALLOW_THREADS
-//             rc = he_delete (self->mDatastore, item);
-//             Py_END_ALLOW_THREADS
-//
-//             if (rc != 0)
-//             {
-//                 PyErr_SetString (HeliumDbException, he_strerror (errno));
-//                 return -1;
-//             }
-//         }
-//     }
-//     return 0;
-// }
-#endif  // WITH_CDR
+    cdr* d;
+    if (!cdr_utils_toCdr (data, d))
+    {
+        PyErr_SetString (HeliumDbException, "failed to get cdr object");
+        return NULL;
+    }
 
+    cdrDateTime t;
+    if (!d->getDateTime (self->mIndexField, t))
+    {
+        PyErr_SetString (HeliumDbException, "failed to retrieve index field");
+        return NULL;
+    }
+
+    int64_t millis = 0;
+    millisFromMidnight (t, millis);
+    int64_t key = (millis / 10) * 10;
+
+    he_item item;
+    item.key = &key;
+    item.key_len = sizeof (key);
+
+    cdr entries;
+    if (!he_utils_exists (self->mDatastore, item))
+    {
+        entries.appendArray (0, *d);
+
+        if (!_heliumUpdateCdr (self->mDatastore, item, entries))
+        {
+            PyErr_SetString (HeliumDbException, "update failed");
+            return NULL;
+        }
+    }
+    else
+    {
+        if (!_retrieveItem (self->mDatastore, item))
+        {
+            PyErr_SetString (HeliumDbException, "retrieve failed");
+            return NULL;
+        }
+
+        entries.deserialize ((const char*)item.val, item.val_len);
+        entries.appendArray (0, *d);
+
+        if (!_heliumUpdateCdr (self->mDatastore, item, entries))
+        {
+            PyErr_SetString (HeliumDbException, "update failed");
+            return NULL;
+        }
+    }
+    Py_INCREF (Py_None);
+    return Py_None;
+}
+
+bool
+compareResults (pair<int64_t, PyObject*> x, pair<int64_t, PyObject*> y)
+{
+    return (x.first < y.first);
+}
+
+PyObject*
+_filterFind (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool findOne)
+{
+    PyObject* qdict = Py_None;
+    he_iter_t itr;
+
+    char *kwlist[] = {(char*)"data",
+                      NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args,
+                                     kwargs,
+                                     "|O",
+                                     kwlist,
+                                     &qdict))
+        return NULL;
+
+    // cdr check
+    // if (!PyDict_Check (qdict))
+    //     return NULL;
+    
+    cdr* query;
+    if (!cdr_utils_toCdr (qdict, query))
+    {
+        PyErr_SetString (HeliumDbException, "failed to convert to cdr");
+        return NULL;
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+    itr = he_iter_open (self->mDatastore, NULL, 0, HE_MAX_VAL_LEN, 0);
+    Py_END_ALLOW_THREADS
+    if (!itr)
+    {
+        PyErr_SetString (HeliumDbException, "failed to open iterator");
+        return NULL;
+    }
+
+    const he_item* item;
+    const cdrArray* entries;
+    size_t used = 0;
+
+    vector< pair<int64_t, PyObject*> > results;
+    cdr* d = new cdr ();
+    while ((item = he_iter_next (itr)))
+    {
+        used = 0;
+        if (!d->deserialize ((const char*)item->val, used))
+        {
+            PyErr_SetString (HeliumDbException, "failed to deserialize cdr");
+            return NULL;
+        }
+
+        if (!d->getArray (0, &entries))
+            continue;
+
+        for (cdrArray::const_iterator it = entries->begin (); it != entries->end (); ++it)
+        {
+            if (cdr_utils_query (const_cast<cdr*>(&(*it)), query))
+            {
+                if (findOne)
+                    return cdr_utils_toPythonObj (new cdr(*it));
+                else
+                {
+                    results.push_back(make_pair (*(int64_t*)item->key,
+                                                 cdr_utils_toPythonObj (new cdr (*it))));
+                }
+            }
+        }
+    }
+    delete d;
+
+    if (findOne)
+    {
+        Py_INCREF (Py_None);
+        return Py_None;
+    }
+
+    sort (results.begin (), results.end (), compareResults);
+
+    PyObject* sorted_results = PyList_New (0);
+
+    vector< pair<int64_t, PyObject*> >::iterator vitr;
+    for (vitr = results.begin (); vitr != results.end (); vitr++)
+        PyList_Append (sorted_results, vitr->second);
+
+    return sorted_results;
+}
+
+PyObject*
+heliumdb_find (heliumdbPy* self, PyObject* args, PyObject* kwargs)
+{
+    return _filterFind (self, args, kwargs, false);
+}
+
+PyObject*
+heliumdb_find_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
+{
+    return _filterFind (self, args, kwargs, true);
+}
+
+PyObject*
+_filterDelete (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool deleteOne)
+{
+    he_iter_t       itr;
+    const he_item*  item;
+    int             rc;
+    PyObject* qdict = Py_None;
+
+    char *kwlist[] = {(char*)"data",
+                      NULL};
+
+    if (!PyArg_ParseTupleAndKeywords(args,
+                                     kwargs,
+                                     "|O",
+                                     kwlist,
+                                     &qdict))
+        return NULL;
+
+    // if (!PyDict_Check (qdict))
+    //     return -1;
+
+    cdr* query;
+    if (!cdr_utils_toCdr (qdict, query))
+    {
+        PyErr_SetString (HeliumDbException, "failed to convert to cdr");
+        return NULL;
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+    itr = he_iter_open (self->mDatastore, NULL, 0, HE_MAX_VAL_LEN, 0);
+    Py_END_ALLOW_THREADS
+    if (!itr)
+    {
+        PyErr_SetString (HeliumDbException, "failed to open iterator");
+        return NULL;
+    }
+
+    size_t used;
+    cdr* d = new cdr();
+    const cdrArray* entries;
+    while ((item = he_iter_next (itr)))
+    {
+        used = 0;
+        if (!d->deserialize ((const char*)item->val, used))
+        {
+            PyErr_SetString (HeliumDbException, "failed to deserialize cdr");
+            return NULL;
+        }
+
+        if (!d->getArray (0, &entries))
+            continue;
+
+        for (cdrArray::const_iterator it = entries->begin (); it != entries->end (); ++it)
+        {
+            if (cdr_utils_query (const_cast<cdr*>(&(*it)), query))
+            {
+                Py_BEGIN_ALLOW_THREADS
+                rc = he_delete (self->mDatastore, item);
+                Py_END_ALLOW_THREADS
+
+                if (rc != 0)
+                {
+                    PyErr_SetString (HeliumDbException, he_strerror (errno));
+                    return NULL;
+                }
+
+                if (deleteOne)
+                {
+                    Py_INCREF (Py_None);
+                    return Py_None;
+                }
+            }
+        }
+    }
+
+    delete d;
+    Py_INCREF (Py_None);
+    return Py_None;
+}
+
+PyObject*
+heliumdb_delete_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
+{
+    return _filterDelete (self, args, kwargs, true);
+}
+
+PyObject*
+heliumdb_delete (heliumdbPy* self, PyObject* args, PyObject* kwargs)
+{
+    return _filterDelete (self, args, kwargs, false);
+}
 
 /* TODO update length and subscript method to be useful*/
 static PyMappingMethods heliumdb_as_mapping = {
@@ -1237,20 +1061,18 @@ static PyMethodDef heliumdbPy_methods[] = {
     {"keys",  (PyCFunction)heliumdb_keys, METH_NOARGS, "return list of all keys"},
     {"values",  (PyCFunction)heliumdb_itervalues, METH_NOARGS, "return list of all values"},
     {"items", (PyCFunction)heliumdb_iteritems,    METH_NOARGS, "iterates items"},
-#if WITH_CDR
-    // {"insert_one", (PyCFunction)heliumdb_insert_one, METH_VARARGS | METH_KEYWORDS,
-    //  "insert a single dictionary object"},
+    {"insert_one", (PyCFunction)heliumdb_insert_one, METH_VARARGS | METH_KEYWORDS,
+     "insert a single dictionary object"},
     {"insert_many", (PyCFunction)heliumdb_insert_many, METH_VARARGS | METH_KEYWORDS,
      "insert a single dictionary object"},
-    // {"find", (PyCFunction)heliumdb_find, METH_VARARGS | METH_KEYWORDS,
-    //  "find values using the given query"},
-    // {"find_one", (PyCFunction)heliumdb_find_one, METH_VARARGS | METH_KEYWORDS,
-    //  "find the first value using the given query"},
-    // {"delete_one", (PyCFunction)heliumdb_delete_one, METH_VARARGS,
-    //  "find first value using the given query, and delete"},
-    // {"delete_many", (PyCFunction)heliumdb_delete_many, METH_VARARGS,
-    //  "find values using the given query, and delete"},
-#endif
+    {"find", (PyCFunction)heliumdb_find, METH_VARARGS | METH_KEYWORDS,
+     "find values using the given query"},
+    {"find_one", (PyCFunction)heliumdb_find_one, METH_VARARGS | METH_KEYWORDS,
+     "find the first value using the given query"},
+    {"delete_one", (PyCFunction)heliumdb_delete_one, METH_VARARGS | METH_KEYWORDS,
+     "find first value using the given query, and delete"},
+    {"delete", (PyCFunction)heliumdb_delete, METH_VARARGS | METH_KEYWORDS,
+     "find values using the given query, and delete"},
     // placeholders
     // __eq__
     // __ne__
