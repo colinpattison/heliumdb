@@ -54,7 +54,7 @@ include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
 include(${CMAKE_ROOT}/Modules/CheckIncludeFileCXX.cmake)
 
 execute_process(
-    COMMAND bash -c "${PYTHON_CONFIG} --include"
+    COMMAND bash -c "${PYTHON_CONFIG} --includes"
     OUTPUT_VARIABLE PYTHON_INCLUDE_PATH
     RESULT_VARIABLE RET
     )
@@ -132,25 +132,6 @@ else()
     message(STATUS "found he.h: ${HE_H}")
     include_directories(${HE_H})
 endif(NOT HE_H)
-
-#cdr
-set(CDR_CMAKE ${SUBMODULE_ROOT_DIR}/ext/cdr CACHE PATH "Location of cdr-cmake" FORCE)
-message(STATUS "cdr-location: " ${CDR_CMAKE})
-ExternalProject_Add(
-  CDR_PROJECT
-  PREFIX ${SUBMODULE_PREFIX_DIR}
-  SOURCE_DIR ${CDR_CMAKE}
-  CMAKE_ARGS -DSUBMODULE_PREFIX_DIR=${SUBMODULE_PREFIX_DIR} -DSUBMODULE_ROOT_DIR=${SUBMODULE_ROOT_DIR} -DCMAKE_INSTALL_PREFIX=${CMAKE_INSTALL_PREFIX} ${SUBMODULE_FLAGS}
-  )
-ExternalProject_Get_Property(CDR_PROJECT binary_dir)
-set(CDR_PROJECT_DIR ${binary_dir}/lib/cmake/cdr CACHE PATH "location of cdr cmake files" FORCE)
-set(CPACK_INSTALL_CMAKE_PROJECTS ${CPACK_INSTALL_CMAKE_PROJECTS} "${binary_dir};cdr;ALL;/")
-
-include_directories(${CMAKE_INSTALL_PREFIX}/include/cdr)
-
-link_directories(
-    ${CMAKE_INSTALL_PREFIX}/lib
-    )
 
 # add source
 add_subdirectory(src)

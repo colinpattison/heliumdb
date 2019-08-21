@@ -366,17 +366,13 @@ heliumdb_ass_sub (heliumdbPy* self, PyObject* k, PyObject* v)
     if (v == NULL)
     {
         // delete
-        char buffer[2] = {0};
-        item.val = (void*)buffer;
-        item.val_len = sizeof (buffer);
-
         Py_BEGIN_ALLOW_THREADS
-        rc = he_delete_lookup (self->mDatastore, &item, 0, 1024);
+        rc = he_delete (self->mDatastore, &item);
         Py_END_ALLOW_THREADS
 
         if (rc != 0)
         {
-            snprintf (err, 128, "he_delete_lookup failed: %s", he_strerror (errno));
+            snprintf (err, 128, "he_delete failed: %s", he_strerror (errno));
             PyErr_SetString (HeliumDbException, err);
             return -1;
         }
