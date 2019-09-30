@@ -218,6 +218,7 @@ heliumdbPy_init (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     }
     else if (strcmp (val_type, "C") == 0)
     {
+        self->mValSerializer = &cdr_utils_serializeCdr;
         self->mValDeserializer = &cdr_utils_deserializeCdr;
     }
     else
@@ -394,11 +395,8 @@ heliumdb_ass_sub (heliumdbPy* self, PyObject* k, PyObject* v)
 bool
 _retrieveItem (he_t& he, he_item& getItem)
 {
-    char*   buffer[8096] = {0};
-    size_t  rdSize = sizeof (buffer);
+    size_t  rdSize = getItem.val_len;
     void*   buf = NULL;
-
-    getItem.val = (void*)buffer;
 
     int rc;
     for (;;)
@@ -436,6 +434,9 @@ heliumdb_subscript (heliumdbPy* self, PyObject* k)
         return NULL;
     }
 
+    char* buffer[8096] = {0};
+    getItem.val = (void*)buffer;
+    getItem.val_len = sizeof (buffer);
     _retrieveItem (self->mDatastore, getItem);
 
     PyObject* obj = self->mValDeserializer (getItem.val, getItem.val_len);
@@ -687,6 +688,57 @@ _heliumUpdateCdr (he_t& he, he_item& item, cdr& d)
     return true;
 }
 
+bool
+_heliumInsertCdr (he_t& he, he_item& item, cdr& d)
+{
+    cdr existing;
+
+    if (!he_utils_exists (he, item))
+    {
+        // key doesn't exist
+        if (!_heliumUpdateCdr (he, item, d))
+        {
+            PyErr_SetString (HeliumDbException, "update failed");
+            return false;
+        }
+    }
+    else
+    {
+        // key already exists
+        char* buffer[8096] = {0};
+        item.val = (void*)buffer;
+        item.val_len = sizeof (buffer);
+        if (!_retrieveItem (he, item))
+        {
+            PyErr_SetString (HeliumDbException, "retrieve failed");
+            return false;
+        }
+
+        size_t used = 0;
+        if (!existing.deserialize ((const char*)item.val, used))
+        {
+            PyErr_SetString (HeliumDbException, "failed to deserialize");
+            return false;
+        }
+
+        cdrArray* entryArray;
+        if (!d.getArray (0, (const cdrArray**)(&entryArray)))
+            return false;
+
+        for (cdrArray::iterator it = entryArray->begin();
+             it != entryArray->end(); ++it)
+            existing.appendArray (0, *it);
+
+        if (!_heliumUpdateCdr (he, item, existing))
+        {
+            PyErr_SetString (HeliumDbException, "update failed");
+            return false;
+        }
+    }
+
+    return true;
+}
+
 PyObject*
 heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
 {
@@ -713,6 +765,7 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     int64_t         key;
     he_item         item;
     cdr             entries;
+    cdr             existing;
     cdr*            d;
 
     for (int i = 0; i < PyList_Size (data); i++)
@@ -741,7 +794,6 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
             return NULL;
         }
 
-
         // round down to nearest 10
         key = (millis / 10) * 10;
 
@@ -754,7 +806,7 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
             item.key = &lastKey;
             item.key_len = sizeof (lastKey);
 
-            if (!_heliumUpdateCdr (self->mDatastore, item, entries))
+            if (!_heliumInsertCdr (self->mDatastore, item, entries))
                 return NULL;
 
             entries.clear ();
@@ -767,7 +819,7 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     item.key = &key;
     item.key_len = sizeof (key);
 
-    if (!_heliumUpdateCdr (self->mDatastore, item, entries))
+    if (!_heliumInsertCdr (self->mDatastore, item, entries))
         return NULL;
 
     Py_INCREF (Py_None);
@@ -796,15 +848,20 @@ heliumdb_insert_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         return NULL;
     }
 
-    cdrDateTime t;
-    if (!d->getDateTime (self->mIndexField, t))
+    // cdrDateTime t;
+    // if (!d->getDateTime (self->mIndexField, t))
+    // {
+    //     PyErr_SetString (HeliumDbException, "failed to retrieve index field");
+    //     return NULL;
+    // }
+
+    int64_t millis = 0;
+    if (!d->getInteger (self->mIndexField, millis))
     {
         PyErr_SetString (HeliumDbException, "failed to retrieve index field");
         return NULL;
     }
-
-    int64_t millis = 0;
-    millisFromMidnight (t, millis);
+    // millisFromMidnight (t, millis);
     int64_t key = (millis / 10) * 10;
 
     he_item item;
@@ -812,33 +869,13 @@ heliumdb_insert_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
     item.key_len = sizeof (key);
 
     cdr entries;
-    if (!he_utils_exists (self->mDatastore, item))
+    entries.appendArray (0, *d);
+    if (!_heliumInsertCdr (self->mDatastore, item, entries))
     {
-        entries.appendArray (0, *d);
-
-        if (!_heliumUpdateCdr (self->mDatastore, item, entries))
-        {
-            PyErr_SetString (HeliumDbException, "update failed");
-            return NULL;
-        }
+        PyErr_SetString (HeliumDbException, "failed to insert cdr");
+        return NULL;
     }
-    else
-    {
-        if (!_retrieveItem (self->mDatastore, item))
-        {
-            PyErr_SetString (HeliumDbException, "retrieve failed");
-            return NULL;
-        }
 
-        entries.deserialize ((const char*)item.val, item.val_len);
-        entries.appendArray (0, *d);
-
-        if (!_heliumUpdateCdr (self->mDatastore, item, entries))
-        {
-            PyErr_SetString (HeliumDbException, "update failed");
-            return NULL;
-        }
-    }
     Py_INCREF (Py_None);
     return Py_None;
 }

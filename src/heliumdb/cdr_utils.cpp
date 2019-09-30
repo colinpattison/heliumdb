@@ -58,6 +58,7 @@ cdr_utils_toPythonObj (cdr* d)
         return NULL;
 
     PyObject* o = SWIG_NewPointerObj (d, CDR_TYPE, SWIG_POINTER_OWN);
+    Py_INCREF (o);
     return o;
 }
 
@@ -70,6 +71,25 @@ cdr_utils_deserializeCdr (void* buf, size_t len)
         return NULL;
 
     return cdr_utils_toPythonObj (d);
+}
+
+bool
+cdr_utils_serializeCdr (PyObject* o, void*& v, size_t& l)
+{
+    cdr* d;
+    if (!cdr_utils_toCdr (o, d))
+        return false;
+
+    char* space = new char[d->serializedSize ()];
+    size_t used = 0;
+
+    if (!d->serialize (space, used, true))
+        return false;
+
+    v = (void*)space;
+    l = used;
+
+    return true;
 }
 
 bool

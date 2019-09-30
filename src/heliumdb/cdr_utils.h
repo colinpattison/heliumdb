@@ -19,3 +19,5 @@ bool cdr_utils_query (cdr* d, cdr* query);
 PyObject* cdr_utils_toPythonObj (cdr* d);
 
 PyObject* cdr_utils_deserializeCdr (void* buf, size_t len);
+
+bool cdr_utils_serializeCdr (PyObject* o, void*& v, size_t& l);

@@ -5,7 +5,7 @@ set (SOURCES
      cdr_utils.cpp
     )
 
-set (LINK_LIBS he cdr)
+set (LINK_LIBS ${LIB_HE} cdr)
 
 execute_process(
     COMMAND bash -c "${PYTHON_CONFIG} --includes"
