@@ -23,8 +23,7 @@ class TestTimeSeries(unittest.TestCase):
             os.remove('/tmp/test-ts')
 
     def _check_cdr_match(self, a, b):
-        if a.keys() != b.keys():
-            return False
+        self.assertEqual(sorted(a.keys()), sorted(b.keys()))
 
         if a.serialize() != b.serialize():
             return False
@@ -71,3 +70,40 @@ class TestTimeSeries(unittest.TestCase):
 
         self.assertTrue(self._check_cdr_match(self.hdb[1000][0][0], d))
         self.assertTrue(self._check_cdr_match(self.hdb[1000][0][1], e))
+
+    def test_find_one(self):
+        d = Cdr()
+        d[55] = "AAPL"
+        d[52] = 1005
+        d[56] = 100
+
+        e = Cdr()
+        e[55] = "FB"
+        e[52] = 1006
+        e[56] = 100
+
+        self.hdb.insert_many([d, e])
+
+        x = self.hdb.find({55: "AAPL"})
+
+        self.assertEqual(len(x), 1)
+
+        self._check_cdr_match(x[0], d)
+
+    def test_find(self):
+        d = Cdr()
+        d[55] = "AAPL"
+        d[52] = 1005
+        d[56] = 100
+
+        e = Cdr()
+        e[55] = "FB"
+        e[52] = 1006
+        e[56] = 100
+
+        self.hdb.insert_many([d, e])
+
+        x = self.hdb.find({55: "AAPL"})
+        self.assertEqual(len(x), 1)
+
+        self._check_cdr_match(x[0], d)

@@ -260,9 +260,12 @@ _filterFind (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool findOne)
         return NULL;
 
     if (!PyDict_Check (qdict))
+    {
+        PyErr_SetString (HeliumDbException, "expected a dictionary");
         return NULL;
+    }
     
-    cdr* query;
+    cdr* query = new cdr ();
     if (!cdrFromPyDict (qdict, query))
     {
         PyErr_SetString (HeliumDbException, "failed to convert to cdr");
@@ -362,7 +365,7 @@ _filterDelete (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool deleteOn
     if (!PyDict_Check (qdict))
         return NULL;
 
-    cdr* query;
+    cdr* query = new cdr ();
     if (!cdrFromPyDict (qdict, query))
     {
         PyErr_SetString (HeliumDbException, "failed to convert to cdr");
