@@ -1,1 +1,1 @@
-add_subdirectory (heliumdb)
+add_subdirectory (helium)

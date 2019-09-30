@@ -1,12 +1,19 @@
 set (SOURCES
      module.cpp
-     db.cpp
-     ts.cpp
-     he_utils.cpp
-     utils.cpp
-     iter.cpp
-     cdr_utils.cpp
+     db/db.cpp
+     db/iter.cpp
+     ts/ts.cpp
+     utils/he_utils.cpp
+     utils/utils.cpp
+     utils/cdr_utils.cpp
     )
+
+include_directories(
+    ${PROJECT_SOURCE_DIR}/src/helium
+    ${PROJECT_SOURCE_DIR}/src/helium/db
+    ${PROJECT_SOURCE_DIR}/src/helium/ts
+    ${PROJECT_SOURCE_DIR}/src/helium/utils
+  )
 
 set (LINK_LIBS ${LIB_HE} cdr)
 

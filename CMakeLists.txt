@@ -80,7 +80,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PYTHON_INCLUDE_PATH}")
 link_libraries(${PYTHON_LDFLAGS})
 
 set(INCLUDE_PATHS
-    ${PROJECT_SOURCE_DIR}/src/heliumdb/
+    ${PROJECT_SOURCE_DIR}/src/helium/
     ${CMAKE_INSTALL_PREFIX}/include
 )
 
