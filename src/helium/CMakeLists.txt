@@ -15,7 +15,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/src/helium/utils
   )
 
-set (LINK_LIBS ${LIB_HE} cdr)
+set (LINK_LIBS ${LIB_HE} cdr cdrpy)
 
 execute_process(
     COMMAND bash -c "${PYTHON_CONFIG} --includes"

@@ -132,7 +132,7 @@ heliumdb_insert_many (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         // if (!cdr_check (pycdr))
         //     return NULL;
 
-        if (!cdr_utils_toCdr (pycdr, d))
+        if (!cdrFromPyObj (pycdr, d))
         {
             PyErr_SetString (HeliumDbException, "failed to retrieve cdr object");
             return NULL;
@@ -199,7 +199,7 @@ heliumdb_insert_one (heliumdbPy* self, PyObject* args, PyObject* kwargs)
         return NULL;
 
     cdr* d;
-    if (!cdr_utils_toCdr (data, d))
+    if (!cdrFromPyObj (data, d))
     {
         PyErr_SetString (HeliumDbException, "failed to get cdr object");
         return NULL;
@@ -259,12 +259,11 @@ _filterFind (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool findOne)
                                      &qdict))
         return NULL;
 
-    // cdr check
-    // if (!PyDict_Check (qdict))
-    //     return NULL;
+    if (!PyDict_Check (qdict))
+        return NULL;
     
     cdr* query;
-    if (!cdr_utils_toCdr (qdict, query))
+    if (!cdrFromPyDict (qdict, query))
     {
         PyErr_SetString (HeliumDbException, "failed to convert to cdr");
         return NULL;
@@ -302,11 +301,11 @@ _filterFind (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool findOne)
             if (cdr_utils_query (const_cast<cdr*>(&(*it)), query))
             {
                 if (findOne)
-                    return cdr_utils_toPythonObj (new cdr(*it));
+                    return cdrToPyObj (new cdr(*it));
                 else
                 {
                     results.push_back(make_pair (*(int64_t*)item->key,
-                                                 cdr_utils_toPythonObj (new cdr (*it))));
+                                                 cdrToPyObj (new cdr (*it))));
                 }
             }
         }
@@ -360,11 +359,11 @@ _filterDelete (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool deleteOn
                                      &qdict))
         return NULL;
 
-    // if (!PyDict_Check (qdict))
-    //     return -1;
+    if (!PyDict_Check (qdict))
+        return NULL;
 
     cdr* query;
-    if (!cdr_utils_toCdr (qdict, query))
+    if (!cdrFromPyDict (qdict, query))
     {
         PyErr_SetString (HeliumDbException, "failed to convert to cdr");
         return NULL;
