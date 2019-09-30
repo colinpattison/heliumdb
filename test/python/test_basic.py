@@ -1,7 +1,7 @@
 #
 # Copyright 2014-2018 Neueda Ltd.
 #
-from heliumdb import Heliumdb, HE_O_CREATE, HE_O_VOLUME_CREATE
+from helium import Db, HE_O_CREATE, HE_O_VOLUME_CREATE
 import unittest
 import os
 
@@ -10,8 +10,8 @@ class TestBasic(unittest.TestCase):
     def setUp(self):
         os.system('truncate -s 2g /tmp/file')
         flags = HE_O_CREATE | HE_O_VOLUME_CREATE
-        self.hdb = Heliumdb(url="he://.//tmp/file",
-                            datastore='helium', flags=flags)
+        self.hdb = Db(url="he://.//tmp/file",
+                      datastore='helium', flags=flags)
 
     def tearDown(self):
         self.hdb.cleanup()
@@ -49,5 +49,5 @@ class TestBasic(unittest.TestCase):
         self.hdb[1] = 'a'
         self.hdb[2] = 'b'
         self.hdb['345'] = 'c'
-        keys = Heliumdb.keys(self.hdb)
+        keys = Db.keys(self.hdb)
         self.assertEqual(keys, [1, 2, '345'])

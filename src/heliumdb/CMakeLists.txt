@@ -1,5 +1,8 @@
 set (SOURCES
      module.cpp
+     db.cpp
+     ts.cpp
+     he_utils.cpp
      utils.cpp
      iter.cpp
      cdr_utils.cpp
@@ -45,9 +48,9 @@ message(STATUS "Python libs: ${PYTHON_LIBS}")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${PYTHON_INCLUDE_PATH}")
 link_libraries(${PYTHON_LDFLAGS})
 
-add_library (heliumdb SHARED ${SOURCES})
-target_link_libraries(heliumdb ${LINK_LIBS})
-set_target_properties (heliumdb PROPERTIES PREFIX "")
-set_target_properties (heliumdb PROPERTIES SUFFIX ".so")
+add_library (helium SHARED ${SOURCES})
+target_link_libraries(helium ${LINK_LIBS})
+set_target_properties (helium PROPERTIES PREFIX "")
+set_target_properties (helium PROPERTIES SUFFIX ".so")
 
-install (TARGETS heliumdb DESTINATION lib/python)
+install (TARGETS helium DESTINATION lib/python)

@@ -13,6 +13,8 @@
 
 extern PyTypeObject heliumdbPyType;
 
+extern PyTypeObject heliumtsPyType;
+
 extern PyTypeObject heliumdbIterKeyType;
 
 extern PyTypeObject heliumdbIterItemType;
@@ -33,6 +35,11 @@ typedef struct
         serializer   mValSerializer;
         deserializer  mValDeserializer;
 } heliumdbPy;
+
+typedef struct
+{
+    heliumdbPy super;
+} heliumtsPy;
 
 typedef struct 
 {

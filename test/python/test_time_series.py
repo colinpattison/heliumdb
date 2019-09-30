@@ -1,7 +1,7 @@
 #
 # Copyright 2014-2018 Neueda Ltd.
 #
-from heliumdb import Heliumdb, HE_O_CREATE, HE_O_VOLUME_CREATE
+from helium import Ts, HE_O_CREATE, HE_O_VOLUME_CREATE
 from cdr import Cdr
 import unittest
 import os
@@ -11,11 +11,11 @@ class TestTimeSeries(unittest.TestCase):
     def setUp(self):
         os.system('truncate -s 2g /tmp/test-ts')
         flags = HE_O_CREATE | HE_O_VOLUME_CREATE
-        self.hdb = Heliumdb(url="he://.//tmp/test-ts",
-                            datastore='helium',
-                            key_type='i',
-                            val_type='C', index_field=52,
-                            flags=flags)
+        self.hdb = Ts(url="he://.//tmp/test-ts",
+                      datastore='helium',
+                      key_type='i',
+                      val_type='C', index_field=52,
+                      flags=flags)
 
     def tearDown(self):
         self.hdb.cleanup()
