@@ -25,10 +25,7 @@ class TestTimeSeries(unittest.TestCase):
     def _check_cdr_match(self, a, b):
         self.assertEqual(sorted(a.keys()), sorted(b.keys()))
 
-        if a.serialize() != b.serialize():
-            return False
-
-        return True
+        self.assertEqual(a.serialize(), b.serialize())
 
     def test_insert_one_basic(self):
         d = Cdr()
@@ -39,7 +36,7 @@ class TestTimeSeries(unittest.TestCase):
         self.hdb.insert_one(d)
 
         self.assertEqual(self.hdb.keys(), [1000])
-        self.assertTrue(self._check_cdr_match(self.hdb[1000][0][0], d))
+        self._check_cdr_match(self.hdb[1000][0][0], d)
 
     def test_insert_one_bucket_assignment(self):
         d = Cdr()
@@ -50,7 +47,7 @@ class TestTimeSeries(unittest.TestCase):
         self.hdb.insert_one(d)
 
         self.assertEqual(self.hdb.keys(), [1000])
-        self.assertTrue(self._check_cdr_match(self.hdb[1000][0][0], d))
+        self._check_cdr_match(self.hdb[1000][0][0], d)
 
     def test_insert_one_two_items(self):
         d = Cdr()
@@ -68,8 +65,8 @@ class TestTimeSeries(unittest.TestCase):
 
         self.assertEqual(self.hdb.keys(), [1000])
 
-        self.assertTrue(self._check_cdr_match(self.hdb[1000][0][0], d))
-        self.assertTrue(self._check_cdr_match(self.hdb[1000][0][1], e))
+        self._check_cdr_match(self.hdb[1000][0][0], d)
+        self._check_cdr_match(self.hdb[1000][0][1], e)
 
     def test_find_one(self):
         d = Cdr()
@@ -107,3 +104,26 @@ class TestTimeSeries(unittest.TestCase):
         self.assertEqual(len(x), 1)
 
         self._check_cdr_match(x[0], d)
+
+    def test_delete(self):
+        d = Cdr()
+        d[55] = "AAPL"
+        d[52] = 1005
+        d[56] = 100
+
+        e = Cdr()
+        e[55] = "FB"
+        e[52] = 1006
+        e[56] = 100
+
+        self.hdb.insert_many([d, e])
+
+        self.hdb.delete({55: "AAPL"})
+
+        x = self.hdb[1000]
+
+        self.assertEqual(len(x[0]), 1)
+
+        y = x[0][0]
+
+        self._check_cdr_match(e, y)

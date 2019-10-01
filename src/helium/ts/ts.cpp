@@ -307,6 +307,7 @@ _filterFind (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool findOne)
                     return cdrToPyObj (new cdr(*it));
                 else
                 {
+                    // TODO lookup the index field setting as the key
                     results.push_back(make_pair (*(int64_t*)item->key,
                                                  cdrToPyObj (new cdr (*it))));
                 }
@@ -384,6 +385,9 @@ _filterDelete (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool deleteOn
     size_t used;
     cdr* d = new cdr();
     const cdrArray* entries;
+    bool recordDeleted = false;
+    cdr retainedEntries;
+    he_item retained;
     while ((item = he_iter_next (itr)))
     {
         used = 0;
@@ -398,25 +402,27 @@ _filterDelete (heliumdbPy* self, PyObject* args, PyObject* kwargs, bool deleteOn
 
         for (cdrArray::const_iterator it = entries->begin (); it != entries->end (); ++it)
         {
-            if (cdr_utils_query (const_cast<cdr*>(&(*it)), query))
+            if (!cdr_utils_query (const_cast<cdr*>(&(*it)), query))
             {
-                Py_BEGIN_ALLOW_THREADS
-                rc = he_delete (self->mDatastore, item);
-                Py_END_ALLOW_THREADS
-
-                if (rc != 0)
-                {
-                    PyErr_SetString (HeliumDbException, he_strerror (errno));
-                    return NULL;
-                }
-
-                if (deleteOne)
-                {
-                    Py_INCREF (Py_None);
-                    return Py_None;
-                }
+                // keep this one
+                retainedEntries.appendArray (0, *it);
+                recordDeleted = true;
             }
         }
+
+        if (recordDeleted)
+        {
+            // update this helium entry with the new cdr array with removed items
+            retained.key = item->key;
+            retained.key_len = sizeof (item->key);
+
+            if (!_heliumUpdateCdr (self->mDatastore, retained, retainedEntries))
+                return NULL;
+
+            recordDeleted = false;
+        }
+
+        retainedEntries.clear ();
     }
 
     delete d;
